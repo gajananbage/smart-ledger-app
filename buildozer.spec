@@ -29,42 +29,26 @@ orientation = portrait
 fullscreen = 0
 
 # (list) Permissions
-# भविष्यात इंटरनेट किंवा स्टोरेज वापरायचे असेल तर या परवानग्या कामाला येतील
-android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+# अँड्रॉइड १० आणि वरच्या व्हर्जनवर क्रॅश टाळण्यासाठी फक्त इंटरनेट परमिशन पुरेशी आहे
+android.permissions = INTERNET
 
-# (int) Target Android API, should be as high as possible.
+# 🛠️ [अँड्रॉइड १० क्रॅश फिक्स] Scoped Storage ब्लॉक टाळण्यासाठी हे मेटा-डेटा जोडणे आवश्यक आहे:
+android.meta_data = android.requestLegacyExternalStorage=true
+
+# (int) Target Android API (अँड्रॉइड १४ साठी API 34 नुसार अपग्रेडेड)
 android.api = 34
 
-# (int) Minimum API your APK will support.
+# (int) Minimum API your APK will support (अँड्रॉइड ५.० आणि त्यावरील सर्व फोनसाठी)
 android.minapi = 21
 
-# (str) Android NDK version to use
+# (str) Android NDK version to use (Flet आणि Python 3.11 साठी सर्वात स्थिर व्हर्जन)
 android.ndk = 25b
 
 # (bool) Use this to accept SDK licenses automatically (AIDL Fix साठी अत्यंत महत्त्वाचे)
 android.accept_sdk_license = True
 
-# (list) The Android architectures to build for
+# (list) The Android architectures to build for (सर्व आधुनिक ६४-बिट फोन्ससाठी)
 android.archs = arm64-v8a
-
-# (list) List of Java .jar files to add to the libs so that pyjnius can access
-# their classes. Don't add space between the paths
-#android.add_jars = foo.jar,bar.jar
-
-# (list) List of Java files to add to the android project
-#android.add_src =
-
-# (list) Android AAR archives to add (must be local string paths)
-#android.add_aars =
-
-# (str) Path to a custom whitelist file
-#android.whitelist =
-
-# (str) Android logcat filters to use
-#android.logcat_filters = *:S python:D
-
-# (bool) Copy old style assets to allow fallback access (deprecated)
-#android.copy_libs = 1
 
 [buildozer]
 
@@ -73,6 +57,3 @@ log_level = 2
 
 # (int) Display warning if buildozer is run as root (0 = False, 1 = True)
 warn_on_root = 1
-
-# (str) Path to build output (default is ./bin)
-# bin_dir = ./bin
