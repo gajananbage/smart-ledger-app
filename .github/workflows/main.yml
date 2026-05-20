@@ -5,7 +5,6 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-# नवीन आणि सुरक्षित Node.js व्हर्जन वापरण्यासाठी ENV सेट केला आहे
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -18,43 +17,45 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # २. पायथन ३.११ सेट करणे (Flet साठी सर्वात स्थिर व्हर्जन)
+    # २. पायथन सेट करणे
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    # ३. अँड्रॉइड बिल्डसाठी आवश्यक असणाऱ्या सिस्टीम डिपेंडन्सीज इन्स्टॉल करणे
+    # ३. ग्रेडर एरर फिक्स करण्यासाठी Java 17 सेट करणे (अत्यंत महत्त्वाचे)
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    # ४. सिस्टीम डिपेंडन्सीज इन्स्टॉल करणे
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev sqlite3 bzip2 libbz2-dev
+        sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev sqlite3 bzip2 libbz2-dev
         pip install --upgrade pip
         pip install buildozer cython virtualenv
 
-    # ४. अधिकृत अँड्रॉइड ॲक्शन वापरून SDK सेट करणे
+    # ५. अधिकृत अँड्रॉइड SDK सेट करणे
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    # ५. SDK टूल्स आणि मुख्यत्वे AIDL इन्स्टॉल करून त्याचे पाथ व्यवस्थित लॉक करणे
+    # ६. SDK टूल्स आणि AIDL चा पाथ लॉक करणे
     - name: Install Android Build-Tools & Fix AIDL
       run: |
-        # sdkmanager चा अचूक पाथ शोधून टूल्स अपडेट करणे
         yes | sdkmanager "build-tools;34.0.0" "platforms;android-34" "platform-tools"
-        
-        # Buildozer साठी पर्यावरण पाथ (Environment Paths) एक्सपोर्ट करणे
         echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
-        
-        # सिस्टीम रूटला AIDL ची लिंक देणे जेणेकरून 'Aidl not found' एरर येणार नाही
         sudo ln -sf ${ANDROID_SDK_ROOT}/build-tools/34.0.0/aidl /usr/bin/aidl
 
-    # ६. Buildozer वापरून APK तयार करणे
+    # ७. Buildozer वापरून APK तयार करणे
     - name: Build with Buildozer
       run: |
         buildozer -v android debug
 
-    # ७. तयार झालेली APK फाईल डाउनलोडसाठी उपलब्ध करून देणे
+    # ८. तयार झालेली APK फाईल अपलोड करणे
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
