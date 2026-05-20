@@ -20,29 +20,27 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Dependencies
+    - name: Install System Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev sqlite3 bzip2 libbz2-dev
         pip install --upgrade pip
         pip install buildozer cython virtualenv
 
-    # 127 एरर फिक्स: अँड्रॉइड SDK पाथ अचूक सेट करून अचूक कमांड रन करणे
-    - name: Install Android Build-Tools (AIDL Fix)
+    - name: Pre-configure Android SDK & AIDL
       run: |
-        # पाथ मॅन्युअली डिफाईन करणे जेणेकरून 127 एरर येणार नाही
         export ANDROID_HOME=/usr/local/lib/android/sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+        # अधिकृत ३३.०.२ बिल्ड-टूल्स इन्स्टॉल करत आहोत ज्यामध्ये AIDL स्थिर चालते
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.2" "platforms;android-33" "platform-tools"
         
-        # कंपोनंट्स इन्स्टॉल करणे
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;34.0.0" "platforms;android-34" "platform-tools"
+        # कंपायल करताना सिस्टीमला पाथ कळावा म्हणून सिमलिंक (Symlink) तयार करत आहोत
+        sudo ln -sf $ANDROID_HOME/build-tools/33.0.2/aidl /usr/bin/aidl
         
-        # पर्यावरण व्हेरिएबल्स GitHub ला पास करणे
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk-bundle" >> $GITHUB_ENV
 
     - name: Build with Buildozer
       run: |
+        # Buildozer ला सांगणे की सिस्टीमचे आधीपासून असलेले SDK वापरावे
         buildozer -v android debug
 
     - name: Upload APK Artifact
