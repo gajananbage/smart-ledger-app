@@ -1,46 +1,83 @@
-
 import flet as ft
 from datetime import datetime
-import json
 
 def main(page: ft.Page):
-    page.title = "Smart Ledger Pro - ₹ Edition"
+    page.title = "Smart Ledger Pro"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 400
     page.padding = 0
     
-    # --- State Management ---
-    if not page.client_storage.contains_key("accounts"):
-        page.client_storage.set("accounts", {})
+    # --- सेफ स्टेट मॅनेजमेंट (क्रॅश-फ्री बॅकअपसह) ---
+    backup_accounts = {}
 
     def get_accounts():
-        return page.client_storage.get("accounts") or {}
+        try:
+            if page.client_storage.contains_key("accounts"):
+                data = page.client_storage.get("accounts")
+                return data if isinstance(data, dict) else {}
+            else:
+                page.client_storage.set("accounts", {})
+                return {}
+        except Exception:
+            # जर मोबाईल स्टोरेज उपलब्ध नसेल तर बॅकअप मेमरी वापरेल
+            return backup_accounts
 
     def save_accounts(data):
-        page.client_storage.set("accounts", data)
+        nonlocal backup_accounts
+        try:
+            page.client_storage.set("accounts", data)
+        except Exception:
+            pass
+        backup_accounts = data
 
-    # --- UI Components & Views ---
+    # --- UI कंपोनंट्स व्याख्या ---
+    in_display = ft.Text("₹0", size=20, weight="bold")
+    out_display = ft.Text("₹0", size=20, weight="bold")
+    people_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+    
+    detail_name = ft.Text("Name", weight="bold")
+    summary_banner = ft.Container(ft.Text("Summary", weight="bold"), padding=15, border_radius=10, margin=15, alignment=ft.alignment.center)
+    amt_input = ft.TextField(label="Amount (₹)", keyboard_type=ft.KeyboardType.NUMBER)
+    note_input = ft.TextField(label="Note (Optional)")
+    entry_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+
+    # --- लॉजिक फंक्शन्स ---
+    
     def refresh_home():
         accounts = get_accounts()
-        search_query = search_field.value.lower() if search_field.value else ""
+        search_query = search_field.value.lower().strip() if search_field.value else ""
         
         people_list.controls.clear()
         total_in = 0
         total_out = 0
 
         for name, data in accounts.items():
+            if not isinstance(data, dict):
+                continue
             if search_query and search_query not in name.lower():
                 continue
                 
             entries = data.get('entries', [])
-            balance = sum(e['amount'] if e['type'] == 'got' else -e['amount'] for e in entries)
+            balance = 0
+            for e in entries:
+                try:
+                    amt = float(e.get('amount', 0))
+                    balance += amt if e.get('type') == 'got' else -amt
+                except (ValueError, TypeError):
+                    continue
             
-            if balance > 0: total_in += balance
-            elif balance < 0: total_out += abs(balance)
+            if balance > 0: 
+                total_in += balance
+            elif balance < 0: 
+                total_out += abs(balance)
 
             bal_color = ft.colors.BLUE if balance > 0 else ft.colors.RED if balance < 0 else ft.colors.GREY_700
             bal_text = "Settled" if balance == 0 else f"₹{abs(balance)}"
             sub_text = "YOU GET" if balance >= 0 else "YOU GIVE"
+
+            # क्लीक इव्हेंट मधील लूप एरर टाळण्यासाठी सुरक्षित पद्धत
+            def make_on_click(person_name):
+                return lambda _: open_detail(person_name)
 
             people_list.controls.append(
                 ft.ListTile(
@@ -50,23 +87,33 @@ def main(page: ft.Page):
                         ft.Text(bal_text, color=bal_color, weight="bold"),
                         ft.Text(sub_text, size=10)
                     ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment="end"),
-                    on_click=lambda e, n=name: open_detail(n)
+                    on_click=make_on_click(name)
                 )
             )
         
         in_display.value = f"₹{total_in}"
         out_display.value = f"₹{total_out}"
-        page.update()
+        try:
+            page.update()
+        except Exception:
+            pass
 
     def open_detail(name):
         page.session.set("current_person", name)
         accounts = get_accounts()
-        if name not in accounts: return
+        if name not in accounts: 
+            return
             
         person = accounts[name]
         detail_name.value = name
         entries = person.get('entries', [])
-        balance = sum(e['amount'] if e['type'] == 'got' else -e['amount'] for e in entries)
+        
+        balance = 0
+        for e in entries:
+            try:
+                balance += float(e['amount']) if e['type'] == 'got' else -float(e['amount'])
+            except Exception:
+                continue
         
         if balance > 0:
             summary_banner.content.value = f"You will get ₹{balance}"
@@ -83,13 +130,18 @@ def main(page: ft.Page):
 
         entry_list.controls.clear()
         for e in reversed(entries):
-            is_got = e['type'] == 'got'
+            is_got = e.get('type') == 'got'
+            try:
+                display_amt = float(e.get('amount', 0))
+            except Exception:
+                display_amt = 0
+                
             entry_list.controls.append(
                 ft.ListTile(
-                    title=ft.Text(e['note'], size=14),
-                    subtitle=ft.Text(e['date'], size=11),
+                    title=ft.Text(e.get('note', ''), size=14),
+                    subtitle=ft.Text(e.get('date', ''), size=11),
                     trailing=ft.Text(
-                        f"{'+' if is_got else '-'} ₹{e['amount']}",
+                        f"{'+' if is_got else '-'} ₹{display_amt}",
                         color=ft.colors.GREEN if is_got else ft.colors.RED,
                         weight="bold"
                     )
@@ -98,32 +150,44 @@ def main(page: ft.Page):
         
         home_view.visible = False
         detail_view.visible = True
-        page.update()
+        try:
+            page.update()
+        except Exception:
+            pass
 
     def add_transaction(is_got):
         name = page.session.get("current_person")
-        if not name: return
+        if not name: 
+            return
             
         try:
-            amt = float(amt_input.value)
-            if amt <= 0: return
-        except (ValueError, TypeError): return
+            # इनपुट व्हॅलिडेशन (रिकामे किंवा चुकीचे शब्द टाकल्यास क्रॅश होणार नाही)
+            clean_val = amt_input.value.strip() if amt_input.value else ""
+            amt = float(clean_val)
+            if amt <= 0: 
+                return
+        except (ValueError, TypeError): 
+            return
 
         accounts = get_accounts()
         if name in accounts:
+            if 'entries' not in accounts[name]:
+                accounts[name]['entries'] = []
+                
             accounts[name]['entries'].append({
                 "amount": amt,
-                "note": note_input.value or ("Cash Received" if is_got else "Payment Made"),
+                "note": note_input.value.strip() if note_input.value else ("Cash Received" if is_got else "Payment Made"),
                 "type": "got" if is_got else "gave",
                 "date": datetime.now().strftime("%d %b %Y, %I:%M %p")
             })
+            
             save_accounts(accounts)
             amt_input.value = ""
             note_input.value = ""
             open_detail(name)
 
     def add_new_person(e):
-        def close_dlg(e):
+        def close_dlg(ev):
             if name_field.value and name_field.value.strip():
                 customer_name = name_field.value.strip()
                 accounts = get_accounts()
@@ -132,7 +196,10 @@ def main(page: ft.Page):
                     save_accounts(accounts)
                     refresh_home()
             dlg.open = False
-            page.update()
+            try:
+                page.update()
+            except Exception:
+                pass
 
         name_field = ft.TextField(label="Customer Name", autofocus=True)
         dlg = ft.AlertDialog(
@@ -142,12 +209,13 @@ def main(page: ft.Page):
         )
         page.dialog = dlg
         dlg.open = True
-        page.update()
-    
-    in_display = ft.Text("₹0", size=20, weight="bold")
-    out_display = ft.Text("₹0", size=20, weight="bold")
+        try:
+            page.update()
+        except Exception:
+            pass
+
+    # --- लेआउट रचना ---
     search_field = ft.TextField(placeholder="Search customer...", on_change=lambda _: refresh_home())
-    people_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
     home_view = ft.Column([
         ft.Container(ft.Text("📝 Smart Ledger Pro", size=20, weight="bold"), padding=20, alignment=ft.alignment.center),
@@ -159,15 +227,14 @@ def main(page: ft.Page):
         people_list
     ], expand=True)
 
-    detail_name = ft.Text("Name", weight="bold")
-    summary_banner = ft.Container(ft.Text("Summary", weight="bold"), padding=15, border_radius=10, margin=15, alignment=ft.alignment.center)
-    amt_input = ft.TextField(label="Amount (₹)", keyboard_type=ft.KeyboardType.NUMBER)
-    note_input = ft.TextField(label="Note (Optional)")
-    entry_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+    def back_to_home(_):
+        detail_view.visible = False
+        home_view.visible = True
+        refresh_home()
 
     detail_view = ft.Column([
         ft.Row([
-            ft.IconButton(ft.icons.ARROW_BACK, on_click=lambda _: [setattr(detail_view, 'visible', False), setattr(home_view, 'visible', True), refresh_home()]),
+            ft.IconButton(ft.icons.ARROW_BACK, on_click=back_to_home),
             detail_name
         ], alignment="start"),
         summary_banner,
